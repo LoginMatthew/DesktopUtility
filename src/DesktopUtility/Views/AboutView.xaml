@@ -1,0 +1,32 @@
+<UserControl x:Class="DesktopUtility.Views.AboutView"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+ <ScrollViewer VerticalScrollBarVisibility="Auto">
+  <StackPanel MaxWidth="680" Margin="0,2,14,8">
+   <TextBlock Text="Desktop Utility" FontSize="28" FontWeight="SemiBold" />
+   <StackPanel Orientation="Horizontal" Margin="0,5,0,14">
+    <TextBlock Text="{Binding Words[Version]}" Margin="0,0,5,0" />
+    <TextBlock Text="{Binding Version}" Foreground="{DynamicResource Accent}" Margin="0,0,18,0" />
+    <TextBlock Text="{Binding Words[Developer]}" Margin="0,0,5,0" />
+    <TextBlock Text="{Binding Author}" Foreground="{DynamicResource Accent}" />
+   </StackPanel>
+   <TextBlock Text="{Binding Words[AboutDescription]}" TextWrapping="Wrap" />
+   <TextBlock Text="{Binding Words[IconCredit]}" TextWrapping="Wrap" Margin="0,8,0,0" />
+   <TextBlock Text="{Binding Words[Usage]}" FontSize="21" FontWeight="SemiBold" Margin="0,20,0,8" />
+   <ItemsControl ItemsSource="{Binding UsageSteps}">
+    <ItemsControl.ItemTemplate>
+     <DataTemplate>
+      <Grid Margin="0,0,0,9">
+       <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="18" />
+        <ColumnDefinition Width="*" />
+       </Grid.ColumnDefinitions>
+       <TextBlock Text="•" Foreground="{DynamicResource Accent}" />
+       <TextBlock Grid.Column="1" Text="{Binding}" TextWrapping="Wrap" />
+      </Grid>
+     </DataTemplate>
+    </ItemsControl.ItemTemplate>
+   </ItemsControl>
+  </StackPanel>
+ </ScrollViewer>
+</UserControl>

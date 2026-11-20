@@ -1,0 +1,25 @@
+<UserControl x:Class="DesktopUtility.Views.SettingsView"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+ <ScrollViewer VerticalScrollBarVisibility="Auto">
+  <StackPanel MaxWidth="620" HorizontalAlignment="Stretch" Margin="0,0,14,0">
+   <ContentControl x:Name="RotationHost" />
+   <CheckBox Content="{Binding Words[Separate]}" IsChecked="{Binding SeparateMonitors}" />
+   <CheckBox Content="{Binding Words[Startup]}" IsChecked="{Binding StartupEnabled}" />
+   <TextBlock Text="{Binding Words[Language]}" Margin="0,12,0,5" />
+   <ComboBox ItemsSource="{Binding Languages}" SelectedIndex="{Binding LanguageIndex}" Width="185" HorizontalAlignment="Left" />
+   <TextBlock Text="{Binding Words[Appearance]}" FontSize="22" FontWeight="SemiBold" Margin="0,18,0,10" />
+   <TextBlock Text="{Binding Words[Accent]}" />
+   <Slider Minimum="0" Maximum="359" Value="{Binding AccentHue}" AutomationProperties.Name="{Binding Words[Accent]}" />
+   <TextBlock Text="{Binding Words[Text]}" />
+   <Slider Minimum="0" Maximum="359" Value="{Binding TextHue}" AutomationProperties.Name="{Binding Words[Text]}" />
+   <TextBlock Text="{Binding Words[Surface]}" />
+   <Slider Minimum="0" Maximum="359" Value="{Binding SurfaceHue}" AutomationProperties.Name="{Binding Words[Surface]}" />
+   <TextBlock Text="{Binding Words[Opacity]}" />
+   <Slider Minimum="0.55" Maximum="1" Value="{Binding Opacity}" AutomationProperties.Name="{Binding Words[Opacity]}" />
+   <TextBlock Text="{Binding Words[PanelOpacity]}" />
+   <Slider Minimum="0" Maximum="1" Value="{Binding PanelOpacity}" AutomationProperties.Name="{Binding Words[PanelOpacity]}" />
+   <Button Content="{Binding Words[Reset]}" HorizontalAlignment="Left" Margin="0,9,0,0" Click="ResetAppearance" />
+  </StackPanel>
+ </ScrollViewer>
+</UserControl>

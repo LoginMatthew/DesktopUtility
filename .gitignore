@@ -1,0 +1,18 @@
+# Visual Studio local files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build and test output
+[Bb]in/
+[Oo]bj/
+TestResults/
+
+# Local application settings
+settings.json
+settings.json.tmp
+
+# Local release packages
+*.zip

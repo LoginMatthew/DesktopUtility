@@ -1,0 +1,74 @@
+<Window x:Class="DesktopUtility.Views.MainWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+ Title="Desktop Utility" Icon="/Assets/DesktopUtility.ico" Width="1050" Height="730" MinWidth="630" MinHeight="470"
+ WindowStartupLocation="CenterScreen" Background="Transparent" AllowsTransparency="True" WindowStyle="None" ResizeMode="CanResize" Foreground="{DynamicResource AppText}"
+ FontFamily="Segoe UI" FontSize="14">
+
+ <shell:WindowChrome.WindowChrome>
+  <shell:WindowChrome CaptionHeight="52" ResizeBorderThickness="6" GlassFrameThickness="0" />
+ </shell:WindowChrome.WindowChrome>
+ <Border Background="{DynamicResource WindowSurface}" BorderBrush="{DynamicResource ChromeStroke}" BorderThickness="1">
+  <Border.Style>
+   <Style TargetType="Border">
+    <Setter Property="CornerRadius" Value="17" />
+    <Style.Triggers>
+     <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Margin" Value="8" />
+     </DataTrigger>
+    </Style.Triggers>
+   </Style>
+  </Border.Style>
+  <DockPanel>
+   <Grid DockPanel.Dock="Top" Height="52" Margin="15,0,9,0">
+    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" IsHitTestVisible="False">
+     <Viewbox Width="19" Height="19" Margin="0,0,10,0">
+      <Path Stroke="{DynamicResource Accent}" StrokeThickness="1.8" StrokeLineJoin="Round"
+            Data="M1,4 L12,1 23,4 12,7 Z M1,10 L12,13 23,10 M1,16 L12,19 23,16" />
+     </Viewbox>
+     <TextBlock Text="Desktop Utility" FontWeight="SemiBold" VerticalAlignment="Center" />
+    </StackPanel>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"
+                shell:WindowChrome.IsHitTestVisibleInChrome="True">
+     <Button x:Name="MinimizeButton" Content="&#xE921;" Style="{StaticResource CaptionButton}" Click="Minimize" />
+     <Button x:Name="MaximizeButton" Style="{StaticResource CaptionButton}" Click="MaximizeOrRestore">
+      <Button.Content>
+       <TextBlock>
+        <TextBlock.Style>
+         <Style TargetType="TextBlock">
+          <Setter Property="Text" Value="&#xE922;" />
+          <Style.Triggers>
+           <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+            <Setter Property="Text" Value="&#xE923;" />
+           </DataTrigger>
+          </Style.Triggers>
+         </Style>
+        </TextBlock.Style>
+       </TextBlock>
+      </Button.Content>
+     </Button>
+     <Button x:Name="CloseButton" Content="&#xE8BB;" Style="{StaticResource CaptionButton}" Click="CloseToTray" />
+    </StackPanel>
+   </Grid>
+   <Grid Margin="24,4,24,18">
+  <Grid.RowDefinitions>
+   <RowDefinition Height="Auto" />
+   <RowDefinition Height="Auto" />
+   <RowDefinition Height="*" />
+   <RowDefinition Height="Auto" />
+  </Grid.RowDefinitions>
+  <StackPanel>
+   
+   <TextBlock Text="{Binding Status}" Foreground="{DynamicResource Accent}" Margin="0,5,0,13" TextWrapping="Wrap" />
+  </StackPanel>
+  <WrapPanel x:Name="Navigation" Grid.Row="1" Margin="0,0,0,9" />
+  <Border Grid.Row="2" Background="{DynamicResource PanelSurface}" BorderBrush="{DynamicResource ChromeStroke}" BorderThickness="1" CornerRadius="16" Padding="16">
+   <Grid x:Name="ContentHost" />
+  </Border>
+  <TextBlock Text="{Binding Notice}" Grid.Row="3" Margin="0,8,0,0" TextWrapping="Wrap" />
+ </Grid>
+  </DockPanel>
+ </Border>
+</Window>
