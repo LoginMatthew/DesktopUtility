@@ -1,4 +1,4 @@
-global using DesktopUtility.Domain;
+global using DesktopUtility.Core;
 global using DesktopUtility.Localization;
 global using DesktopUtility.Models;
 global using DesktopUtility.PresentationControls;

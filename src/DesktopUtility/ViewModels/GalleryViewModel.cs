@@ -15,12 +15,7 @@ internal sealed class GalleryViewModel(WallpaperSession session, Action<string> 
     public bool SelectedOnly
     {
         get => session.Settings.SelectedOnly;
-        set
-        {
-            session.Settings.SelectedOnly = value;
-            session.RefreshCandidates();
-            session.Save();
-        }
+        set => session.SetSelectedOnly(value);
     }
 
     public void ChangePage(int offset) => PageIndex = Math.Clamp(PageIndex + offset, 0, LastPage);
@@ -29,31 +24,8 @@ internal sealed class GalleryViewModel(WallpaperSession session, Action<string> 
     public void Refresh() => loadFolder(Folder);
     public bool Includes(string path) => session.Settings.Selected.Contains(path);
 
-    public void Include(string path, bool enabled)
-    {
-
-        if (enabled)
-        {
-            session.Settings.Selected.Add(path);
-        }
-        else
-        {
-            session.Settings.Selected.Remove(path);
-        }
-
-        if (SelectedOnly)
-        {
-            session.RefreshCandidates();
-        }
-
-        session.Save();
-    }
-
-    public void SetFavorite(string? path)
-    {
-        session.Settings.Favorite = path;
-        session.Save();
-    }
+    public void Include(string path, bool enabled) => session.SetSelected(path, enabled);
+    public void SetFavorite(string? path) => session.SetFavorite(path);
 
     public void ApplyFavorite() => session.ApplyFavorite();
     public void Apply(string? path, string? monitorId) => session.Apply(path, monitorId);

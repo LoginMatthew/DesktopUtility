@@ -1,4 +1,4 @@
-namespace DesktopUtility.Domain;
+namespace DesktopUtility.Core;
 
 internal sealed class RotationSchedule(TimeProvider clock)
 {

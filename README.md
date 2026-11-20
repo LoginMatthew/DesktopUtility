@@ -24,18 +24,17 @@ The application icon was created with AI.
 | `Views`, `PresentationControls` | WPF windows and controls, custom chrome, dialogs, and thumbnail display. |
 | `ViewModels` | Gallery operations, settings bindings, rotation controls, and display state. |
 | `Models` | Persistent settings and defaults. |
-| `Domain` | Rotation scheduling, image assignment, and the wallpaper service contract. |
-| `Services` | Application workflows for rotation, catalog loading, and settings persistence. |
+| `DesktopUtility.Core` | Wallpaper scheduling, candidate selection, monitor assignment and the wallpaper service contract. |
+| `Services` | WPF-side rotation state, catalog loading and settings persistence. |
 | `Infrastructure` | Platform adapters grouped into Images, Persistence, Startup, and Wallpaper. |
 | `Localization`, `Themes` | Four interface languages and shared WPF styles and brushes. |
 
-`App.xaml.cs` composes the application and manages its lifetime. `TimeProvider` and `IWallpaperService` provide test seams for the core rotation rules. The appearance sliders control the alpha of the background and content-panel brushes while text and controls stay readable. Launch with `--open` to show the main window immediately during development.
+`App.xaml.cs` composes the application and manages its lifetime. `DesktopUtility.Core` is a plain .NET library. It accepts a `TimeProvider` and an `IWallpaperService` so rotation can be tested without WPF or Windows wallpaper changes. The WPF application supplies the timer and Windows adapter. The appearance sliders control the alpha of the background and content-panel brushes while text and controls stay readable. Launch with `--open` to show the main window immediately during development.
 
 The current solution uses only framework libraries and targets .NET 8 to match the development and target machines.
 
 ## Roadmap
 
-1. **Extract a .NET core library.** Move rotation scheduling, image selection and coordination into `DesktopUtility.Core`. The WPF project will continue to own the views, tray icon and Windows adapters.
-2. **Add automated tests.** A separate test project will cover interval changes, paused rotation, selected images and multi-monitor assignment. Additional tests will cover settings persistence and launching the main window from the tray.
-3. **Add optional system monitoring.** Display CPU load, RAM usage, disk activity and NVIDIA GPU utilization. A master switch and per-metric switches will control collection. Turning a metric off will stop its sampling.
-4. **Move to .NET 10.** Update the target framework when development moves to Visual Studio 2026 and verify the application on the target Windows versions.
+1. **Add automated tests.** A separate test project will cover interval changes, paused rotation, selected images and multi-monitor assignment. Additional tests will cover settings persistence and launching the main window from the tray.
+2. **Add optional system monitoring.** Display CPU load, RAM usage, disk activity and NVIDIA GPU utilization. A master switch and per-metric switches will control collection. Turning a metric off will stop its sampling.
+3. **Move to .NET 10.** Update the target framework when development moves to Visual Studio 2026 and verify the application on the target Windows versions.

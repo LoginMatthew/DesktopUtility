@@ -4,6 +4,7 @@ using System.IO;
 using System.Security;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Threading;
 using DesktopUtility.Infrastructure.Persistence;
 using DesktopUtility.Infrastructure.Startup;
 using DesktopUtility.Infrastructure.Wallpaper;
@@ -20,6 +21,8 @@ public partial class App : Application
     private readonly SettingsStore store = new(Path.Combine(AppContext.BaseDirectory, "settings.json"));
     private SettingsPersistence? persistence;
     private WallpaperSession? session;
+    private DispatcherTimer? rotationTimer;
+    private WindowsWallpaperService? wallpaper;
     private MainWindow? dashboard;
     private Forms.NotifyIcon? trayIcon;
     private System.Drawing.Icon? trayArtwork;
@@ -58,7 +61,11 @@ public partial class App : Application
             Trace.TraceWarning(error.ToString());
         }
 
-        session = new WallpaperSession(settings, new WindowsWallpaperService(), TimeProvider.System) { MessageKey = message };
+        wallpaper = new WindowsWallpaperService();
+        session = new WallpaperSession(settings, wallpaper, TimeProvider.System) { MessageKey = message };
+        rotationTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        rotationTimer.Tick += OnRotationTick;
+        rotationTimer.Start();
         persistence = new SettingsPersistence(store, session);
         words.Select(settings.Language);
         var appearance = new SettingsViewModel(session, words, () => StartupEnabled, SetStartup, ChangeLanguage, ApplyAppearance);
@@ -106,6 +113,8 @@ public partial class App : Application
 
         return (System.Drawing.Icon)icon.Clone();
     }
+
+    private void OnRotationTick(object? sender, EventArgs args) => _ = session?.TickAsync();
 
     private void ApplyAppearance() => ThemeResources.Apply(Resources, session!.Settings);
     internal bool SetStartup(bool enabled)
@@ -173,7 +182,9 @@ public partial class App : Application
         exiting = true;
         folderLoader?.Dispose();
         persistence?.Dispose();
+        rotationTimer?.Stop();
         session?.Dispose();
+        wallpaper?.Dispose();
         trayIcon?.Dispose();
         trayArtwork?.Dispose();
 

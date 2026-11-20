@@ -3,11 +3,37 @@ using System.Runtime.InteropServices;
 
 namespace DesktopUtility.Infrastructure.Wallpaper;
 
-internal sealed class WindowsWallpaperService : IWallpaperService
+internal sealed class WindowsWallpaperService : IWallpaperService, IDisposable
 {
+    private readonly WallpaperWorker worker = new();
     private static readonly Guid ClassId = new("C2CF3110-460E-4FC1-B9D0-8A1C0C9CC4BD");
 
-    public IReadOnlyList<MonitorTarget> GetMonitors()
+    public Task<IReadOnlyList<MonitorTarget>> GetMonitorsAsync() => worker.RunAsync(() => RunOperation(GetMonitors));
+
+    public Task ApplyAsync(string filePath, string? monitorId) =>
+        worker.RunAsync(() => RunOperation(() =>
+        {
+            Apply(filePath, monitorId);
+
+            return true;
+        }));
+
+    public void Dispose() => worker.Dispose();
+
+    private static T RunOperation<T>(Func<T> action)
+    {
+        try
+        {
+
+            return action();
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or COMException)
+        {
+            throw new WallpaperOperationException(error);
+        }
+    }
+
+    private static IReadOnlyList<MonitorTarget> GetMonitors()
     {
 
         return WithDesktopWallpaper(wallpaper =>
@@ -30,7 +56,7 @@ internal sealed class WindowsWallpaperService : IWallpaperService
         });
     }
 
-    public void Apply(string filePath, string? monitorId)
+    private static void Apply(string filePath, string? monitorId)
     {
 
         if (!File.Exists(filePath))

@@ -22,12 +22,6 @@ internal sealed class WallpaperWorker : IDisposable
         thread.Start();
     }
 
-    public async Task RunAsync(Action action)
-    {
-        var dispatcher = await ready.Task.ConfigureAwait(false);
-        await dispatcher.InvokeAsync(action).Task.ConfigureAwait(false);
-    }
-
     public async Task<T> RunAsync<T>(Func<T> action)
     {
         var dispatcher = await ready.Task.ConfigureAwait(false);

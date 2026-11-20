@@ -47,11 +47,7 @@ internal sealed class SettingsViewModel(
     public bool SeparateMonitors
     {
         get => session.Settings.SeparateMonitors;
-        set
-        {
-            session.Settings.SeparateMonitors = value;
-            session.UpdateSchedule();
-        }
+        set => session.SetSeparateMonitors(value);
     }
 
     public double AccentHue

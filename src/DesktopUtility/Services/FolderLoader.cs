@@ -25,19 +25,12 @@ internal sealed class FolderLoader(WallpaperSession state, Action folderChanged)
             var images = await ImageCatalog.ReadAsync(folder, request.Token);
             request.Token.ThrowIfCancellationRequested();
 
-            if (!string.Equals(state.Settings.Folder, folder, StringComparison.OrdinalIgnoreCase))
-            {
-                state.Settings.Folder = folder;
-                state.Settings.Selected.Clear();
-                state.Save();
-            }
-
             if (state.MessageKey == "Loading")
             {
                 state.MessageKey = null;
             }
 
-            state.SetImages(images);
+            state.SetFolderImages(folder, images);
             folderChanged();
         }
         catch (OperationCanceledException) when (request.IsCancellationRequested)

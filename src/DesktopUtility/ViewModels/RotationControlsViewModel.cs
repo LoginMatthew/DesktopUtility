@@ -5,11 +5,7 @@ internal sealed class RotationControlsViewModel(WallpaperSession session)
     public bool Enabled
     {
         get => session.Settings.RotationEnabled;
-        set
-        {
-            session.Settings.RotationEnabled = value;
-            session.UpdateSchedule();
-        }
+        set => session.SetRotationEnabled(value);
     }
 
     public int IntervalMinutes => session.Settings.IntervalMinutes;
@@ -31,9 +27,7 @@ internal sealed class RotationControlsViewModel(WallpaperSession session)
             return false;
         }
 
-        session.Settings.IntervalMinutes = minutes;
-        session.MessageKey = null;
-        session.UpdateSchedule();
+        session.SetInterval(minutes);
 
         return true;
     }

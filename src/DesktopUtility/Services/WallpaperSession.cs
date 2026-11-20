@@ -1,69 +1,91 @@
-using System.IO;
-using System.Runtime.InteropServices;
-using System.Windows.Threading;
-using DesktopUtility.Infrastructure.Wallpaper;
-
 namespace DesktopUtility.Services;
 
-internal sealed class WallpaperSession : IDisposable
+internal sealed class WallpaperSession(Settings settings, IWallpaperService wallpaper, TimeProvider clock) : IDisposable
 {
-    private readonly IWallpaperService wallpaper;
-    private readonly WallpaperRotation rotation;
-    private readonly DispatcherTimer timer;
-    private readonly WallpaperWorker worker = new();
-    private int pendingActions;
+    private readonly WallpaperRotationCoordinator rotation = new(wallpaper, clock);
     private bool disposed;
-    private readonly RotationSchedule schedule;
-    private IReadOnlyList<string> candidates = [];
 
-
-    public WallpaperSession(Settings settings, IWallpaperService wallpaper, TimeProvider clock)
-    {
-        Settings = settings;
-        this.wallpaper = wallpaper;
-        schedule = new RotationSchedule(clock);
-        rotation = new WallpaperRotation(wallpaper);
-        timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        timer.Tick += OnTick;
-        timer.Start();
-    }
-
-    public Settings Settings { get; }
+    public Settings Settings { get; } = settings;
     public IReadOnlyList<string> Images { get; private set; } = [];
     public string? MessageKey { get; set; }
     public event Action? Changed;
     public event Action? StateUpdated;
     public event Action? ScheduleChanged;
 
-    public TimeSpan? Remaining => schedule.Remaining;
+    public TimeSpan? Remaining => rotation.Remaining;
 
-    public void SetImages(IReadOnlyList<string> images)
+    public void SetFolderImages(string folder, IReadOnlyList<string> images)
     {
+        bool folderChanged = !string.Equals(Settings.Folder, folder, StringComparison.OrdinalIgnoreCase);
+
+        if (folderChanged)
+        {
+            Settings.Folder = folder;
+            Settings.Selected.Clear();
+        }
+
         Images = images;
-        RefreshCandidates();
+        RefreshSchedule();
+
+        if (folderChanged)
+        {
+            Save();
+        }
     }
 
-    public void RefreshCandidates()
+    public void SetSelectedOnly(bool value)
     {
-        candidates = Settings.SelectedOnly ? Images.Where(Settings.Selected.Contains).ToArray() : Images;
-        ResetSchedule();
+        Settings.SelectedOnly = value;
+        RefreshSchedule();
+        Save();
     }
 
-    public void ResetSchedule()
+    public void SetSelected(string path, bool selected)
     {
-        schedule.Restart(Settings.RotationEnabled, candidates.Count, Settings.IntervalMinutes);
-        StateUpdated?.Invoke();
+
+        if (selected)
+        {
+            Settings.Selected.Add(path);
+        }
+        else
+        {
+            Settings.Selected.Remove(path);
+        }
+
+        if (Settings.SelectedOnly)
+        {
+            RefreshSchedule();
+        }
+
+        Save();
+    }
+
+    public void SetFavorite(string? path)
+    {
+        Settings.Favorite = path;
+        Save();
+    }
+
+    public void SetRotationEnabled(bool enabled)
+    {
+        Settings.RotationEnabled = enabled;
+        UpdateSchedule();
+    }
+
+    public void SetInterval(int minutes)
+    {
+        Settings.IntervalMinutes = minutes;
+        MessageKey = null;
+        UpdateSchedule();
+    }
+
+    public void SetSeparateMonitors(bool value)
+    {
+        Settings.SeparateMonitors = value;
+        UpdateSchedule();
     }
 
     public void NotifyState() => StateUpdated?.Invoke();
-
-    public void UpdateSchedule()
-    {
-        ResetSchedule();
-        ScheduleChanged?.Invoke();
-        Changed?.Invoke();
-    }
-
     public void Save() => Changed?.Invoke();
 
     public async Task<IReadOnlyList<MonitorTarget>> GetMonitorsAsync()
@@ -71,9 +93,9 @@ internal sealed class WallpaperSession : IDisposable
         try
         {
 
-            return await worker.RunAsync(wallpaper.GetMonitors);
+            return await wallpaper.GetMonitorsAsync();
         }
-        catch (COMException)
+        catch (Exception error) when (error is WallpaperOperationException or OperationCanceledException)
         {
 
             return [];
@@ -86,12 +108,12 @@ internal sealed class WallpaperSession : IDisposable
         if (path is null)
         {
             MessageKey = "Focus";
-            StateUpdated?.Invoke();
+            NotifyState();
 
             return;
         }
 
-        _ = RunWallpaperActionAsync(() => wallpaper.Apply(path, monitorId));
+        _ = UpdateAfterActionAsync(rotation.ApplyAsync(path, monitorId));
     }
 
     public void ApplyFavorite()
@@ -100,7 +122,7 @@ internal sealed class WallpaperSession : IDisposable
         if (Settings.Favorite is null)
         {
             MessageKey = "NoFavorite";
-            StateUpdated?.Invoke();
+            NotifyState();
 
             return;
         }
@@ -108,50 +130,39 @@ internal sealed class WallpaperSession : IDisposable
         Apply(Settings.Favorite, null);
     }
 
-    private void OnTick(object? sender, EventArgs args)
-    {
+    public Task TickAsync() => UpdateAfterActionAsync(rotation.TickAsync());
 
-        if (schedule.IsDue && pendingActions == 0)
+    private async Task UpdateAfterActionAsync(Task<WallpaperActionResult> action)
+    {
+        var result = await action;
+
+        if (disposed)
         {
-            var currentCandidates = candidates;
-            bool separateMonitors = Settings.SeparateMonitors;
-            _ = RunWallpaperActionAsync(() => rotation.Advance(currentCandidates, separateMonitors));
+
+            return;
         }
-        else
+
+        if (result != WallpaperActionResult.Skipped)
         {
-            StateUpdated?.Invoke();
+            MessageKey = result == WallpaperActionResult.Failed ? "WallpaperError" : null;
         }
+
+        NotifyState();
     }
 
-    private async Task RunWallpaperActionAsync(Action action)
+    private void RefreshSchedule()
     {
-        pendingActions++;
-        ResetSchedule();
-        try
-        {
-            await worker.RunAsync(action);
-            MessageKey = null;
-        }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException or COMException or AggregateException or OperationCanceledException)
-        {
-            MessageKey = "WallpaperError";
-        }
-
-        finally
-        {
-            pendingActions--;
-
-            if (!disposed)
-            {
-                ResetSchedule();
-            }
-        }
+        rotation.Configure(Images, Settings.Selected, Settings.SelectedOnly,
+            Settings.RotationEnabled, Settings.IntervalMinutes, Settings.SeparateMonitors);
+        NotifyState();
     }
 
-    public void Dispose()
+    private void UpdateSchedule()
     {
-        disposed = true;
-        timer.Stop();
-        worker.Dispose();
+        RefreshSchedule();
+        ScheduleChanged?.Invoke();
+        Save();
     }
+
+    public void Dispose() => disposed = true;
 }
