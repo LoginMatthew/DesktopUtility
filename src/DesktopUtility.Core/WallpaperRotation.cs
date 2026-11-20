@@ -17,16 +17,27 @@ internal sealed class WallpaperRotation(IWallpaperService wallpaper)
             ? await wallpaper.GetMonitorsAsync().ConfigureAwait(false)
             : [new MonitorTarget(null, "")];
 
-        bool failed = false;
+        var assignments = new List<MonitorWallpaperAssignment>(monitors.Count);
 
         foreach (var monitor in monitors)
         {
             string path = candidates[nextIndex % candidates.Count];
             nextIndex = (nextIndex + 1) % candidates.Count;
+            assignments.Add(new MonitorWallpaperAssignment(monitor.Id, path));
+        }
 
+        return await ApplyAssignmentsAsync(assignments).ConfigureAwait(false);
+    }
+
+    public async Task<WallpaperActionResult> ApplyAssignmentsAsync(IReadOnlyList<MonitorWallpaperAssignment> assignments)
+    {
+        bool failed = false;
+
+        foreach (var assignment in assignments)
+        {
             try
             {
-                await wallpaper.ApplyAsync(path, monitor.Id).ConfigureAwait(false);
+                await wallpaper.ApplyAsync(assignment.ImagePath, assignment.MonitorId).ConfigureAwait(false);
             }
             catch (WallpaperOperationException)
             {

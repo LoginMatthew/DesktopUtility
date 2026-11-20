@@ -41,6 +41,24 @@ internal sealed class GalleryView(Window owner, GalleryViewModel viewModel, Lang
             return layout;
         }
 
+        var selectionChecks = new List<(string Path, CheckBox Control)>();
+        void SetAllSelected(bool selected)
+        {
+            viewModel.SetAllSelected(selected);
+
+            foreach (var (path, checkBox) in selectionChecks)
+            {
+                checkBox.IsChecked = viewModel.Includes(path);
+            }
+        }
+
+        toolbar.Children.Add(Button(words["SelectAllImages"], () => SetAllSelected(true)));
+        toolbar.Children.Add(Button(words["ClearSelectedImages"], () => SetAllSelected(false)));
+
+        var connectedMonitors = viewModel.GetMonitorsAsync();
+        var monitorAssignments = new MonitorAssignmentsView(viewModel, words, connectedMonitors);
+        header.Children.Add(monitorAssignments);
+
         var operations = new WrapPanel();
 
         DockPanel.SetDock(operations, Dock.Bottom);
@@ -49,7 +67,7 @@ internal sealed class GalleryView(Window owner, GalleryViewModel viewModel, Lang
         var monitors = new ComboBox { MinWidth = 115 };
         monitors.Items.Add(new MonitorTarget(null, words["All"]));
 
-        _ = PopulateMonitorsAsync(monitors);
+        _ = PopulateMonitorsAsync(monitors, connectedMonitors);
         monitors.SelectedIndex = 0;
 
         int lastPage = viewModel.LastPage;
@@ -94,7 +112,13 @@ internal sealed class GalleryView(Window owner, GalleryViewModel viewModel, Lang
         var favorite = Button(words["Favorite"], () => viewModel.SetFavorite(CurrentPath()));
 
         apply.IsEnabled = favorite.IsEnabled = false;
-        items.SelectionChanged += (_, _) => apply.IsEnabled = favorite.IsEnabled = CurrentPath() is not null;
+        items.SelectionChanged += (_, _) =>
+        {
+            string? path = CurrentPath();
+            apply.IsEnabled = favorite.IsEnabled = path is not null;
+            monitorAssignments.SetSelectedImage(path);
+        };
+
         operations.Children.Add(apply);
         operations.Children.Add(favorite);
 
@@ -112,6 +136,7 @@ internal sealed class GalleryView(Window owner, GalleryViewModel viewModel, Lang
             include.ToolTip = words["Include"];
             System.Windows.Automation.AutomationProperties.SetName(include, words["Include"]);
             card.Children.Add(include);
+            selectionChecks.Add((path, include));
             items.Items.Add(new ListBoxItem { Content = card, Tag = path, Margin = new Thickness(0, 0, 7, 7) });
             thumbnails.Add((path, thumbnail, details));
         }
@@ -123,10 +148,10 @@ internal sealed class GalleryView(Window owner, GalleryViewModel viewModel, Lang
         return layout;
     }
 
-    private async Task PopulateMonitorsAsync(ComboBox monitors)
+    private static async Task PopulateMonitorsAsync(ComboBox monitors, Task<IReadOnlyList<MonitorTarget>> connectedMonitors)
     {
 
-        foreach (var monitor in await viewModel.GetMonitorsAsync())
+        foreach (var monitor in await connectedMonitors)
         {
             monitors.Items.Add(monitor);
         }

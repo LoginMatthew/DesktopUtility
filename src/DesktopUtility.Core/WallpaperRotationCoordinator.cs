@@ -86,6 +86,24 @@ public sealed class WallpaperRotationCoordinator(IWallpaperService wallpaper, Ti
         });
     }
 
+    public Task<WallpaperActionResult> ApplyAssignmentsAsync(IReadOnlyList<MonitorWallpaperAssignment> assignments)
+    {
+
+        if (assignments.Count == 0)
+        {
+
+            return Task.FromResult(WallpaperActionResult.Skipped);
+        }
+
+        var snapshot = assignments.ToArray();
+        lock (stateGate)
+        {
+            BeginAction();
+        }
+
+        return RunAsync(() => rotation.ApplyAssignmentsAsync(snapshot));
+    }
+
     private void BeginAction()
     {
         pendingActions++;

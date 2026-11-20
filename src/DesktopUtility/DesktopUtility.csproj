@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <Version>0.2.4</Version>
+    <Version>0.2.5</Version>
     <ApplicationIcon>Assets/DesktopUtility.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>

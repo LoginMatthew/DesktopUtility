@@ -60,6 +60,29 @@ internal sealed class WallpaperSession(Settings settings, IWallpaperService wall
         Save();
     }
 
+    public void SetAllSelected(bool selected)
+    {
+
+        if (selected)
+        {
+            Settings.Selected.UnionWith(Images);
+        }
+        else
+        {
+            Settings.Selected.ExceptWith(Images);
+        }
+
+        if (Settings.SelectedOnly)
+        {
+            RefreshSchedule();
+        }
+
+        Save();
+    }
+
+    public void ApplyMonitorAssignments(IReadOnlyList<MonitorWallpaperAssignment> assignments) =>
+        _ = UpdateAfterActionAsync(rotation.ApplyAssignmentsAsync(assignments));
+
     public void SetFavorite(string? path)
     {
         Settings.Favorite = path;
