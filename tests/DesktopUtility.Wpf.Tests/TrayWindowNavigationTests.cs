@@ -1,6 +1,9 @@
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Threading;
 using DesktopUtility.Core;
 using DesktopUtility.Localization;
@@ -14,6 +17,38 @@ namespace DesktopUtility.Wpf.Tests;
 
 public sealed class TrayWindowNavigationTests
 {
+    [Fact]
+    public async Task CustomWindowBoundsApplyTheMinimumSizeToNativeResizing()
+    {
+        await RunOnStaAsync(() =>
+        {
+            var window = new Window { MinWidth = 820, MinHeight = 560, ShowActivated = false, ShowInTaskbar = false };
+            window.SourceInitialized += (_, _) => WindowMaximization.Attach(window);
+            window.Show();
+            nint info = Marshal.AllocHGlobal(10 * sizeof(int));
+
+            try
+            {
+                Marshal.Copy(new int[10], 0, info, 10);
+                nint handle = new WindowInteropHelper(window).Handle;
+                SendMessage(handle, 0x0024, 0, info);
+                var dpi = VisualTreeHelper.GetDpi(window);
+                var workArea = System.Windows.Forms.Screen.FromHandle(handle).WorkingArea;
+
+                Assert.Equal(Math.Min(workArea.Width, (int)Math.Ceiling(820 * dpi.DpiScaleX)), Marshal.ReadInt32(info, 6 * sizeof(int)));
+                Assert.Equal(Math.Min(workArea.Height, (int)Math.Ceiling(560 * dpi.DpiScaleY)), Marshal.ReadInt32(info, 7 * sizeof(int)));
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(info);
+                window.Close();
+            }
+        });
+    }
+
+    [DllImport("user32.dll", EntryPoint = "SendMessageW")]
+    private static extern nint SendMessage(nint window, uint message, nint wParam, nint lParam);
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

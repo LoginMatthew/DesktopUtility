@@ -1,13 +1,5 @@
 namespace DesktopUtility.Core;
 
-public enum WallpaperActionResult
-{
-    Skipped,
-    Applied,
-    Failed,
-    AccessDenied
-}
-
 public sealed class WallpaperRotationCoordinator(IWallpaperService wallpaper, TimeProvider clock)
 {
     private readonly RotationSchedule schedule = new(clock);

@@ -5,6 +5,8 @@ using System.Security;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Threading;
+using DesktopUtility.Core.Monitoring;
+using DesktopUtility.Infrastructure.Monitoring;
 using DesktopUtility.Infrastructure.Persistence;
 using DesktopUtility.Infrastructure.Startup;
 using DesktopUtility.Infrastructure.Wallpaper;
@@ -24,6 +26,7 @@ public partial class App : Application
     private DispatcherTimer? rotationTimer;
     private WindowsWallpaperService? wallpaper;
     private MainWindow? dashboard;
+    private MonitoringViewModel? monitoring;
     private Forms.NotifyIcon? trayIcon;
     private System.Drawing.Icon? trayArtwork;
     private Window? quickPanel;
@@ -52,12 +55,21 @@ public partial class App : Application
         try
         {
             settings = store.Load();
-            StartupEnabled = WindowsStartup.IsEnabled();
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException or SecurityException)
         {
             settings = new Settings();
             message = "SettingsError";
+            Trace.TraceWarning(error.ToString());
+        }
+
+        try
+        {
+            StartupEnabled = WindowsStartup.IsEnabled();
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or SecurityException)
+        {
+            message ??= "StartupError";
             Trace.TraceWarning(error.ToString());
         }
 
@@ -71,7 +83,10 @@ public partial class App : Application
         var appearance = new SettingsViewModel(session, words, () => StartupEnabled, SetStartup, ChangeLanguage, ApplyAppearance);
         folderLoader = new FolderLoader(session, () => dashboard!.FolderChanged());
         var gallery = new GalleryViewModel(session, folder => _ = folderLoader.LoadAsync(folder));
-        dashboard = new MainWindow(session, words, appearance, gallery);
+        var temperatures = new HardwareTemperatureMonitor();
+        var sampler = new MonitoringSampler(metric => WindowsMetricReaders.Create(metric, temperatures), TimeSpan.FromSeconds(2));
+        monitoring = new MonitoringViewModel(settings, words, sampler, session.Save, Dispatcher, temperatures.SetMetrics);
+        dashboard = new MainWindow(session, words, appearance, gallery, monitoring);
         dashboard.Closing += HideDashboard;
         MainWindow = dashboard;
         ApplyAppearance();
@@ -138,6 +153,7 @@ public partial class App : Application
 
     private void ChangeLanguage()
     {
+        monitoring?.RefreshLanguage();
         dashboard!.Render();
         quickPanel?.Close();
     }
@@ -164,17 +180,39 @@ public partial class App : Application
             return;
         }
 
-        var window = new QuickPanelWindow(session!, words, ShowDashboard, Shutdown);
+        var window = new QuickPanelWindow(session!, words, ShowDashboard, () => _ = ExitFromTrayAsync());
         window.Closed += (_, _) => quickPanel = null;
         quickPanel = window;
         window.Show();
         window.Activate();
     }
 
+    private async Task ExitFromTrayAsync()
+    {
+
+        if (exiting)
+        {
+
+            return;
+        }
+
+        exiting = true;
+        quickPanel?.Close();
+
+        if (monitoring is not null)
+        {
+            monitoring.Dispose();
+            await monitoring.Fps.WaitForCapturesAsync();
+        }
+
+        Shutdown();
+    }
+
     protected override void OnExit(ExitEventArgs args)
     {
         exiting = true;
         folderLoader?.Dispose();
+        monitoring?.Dispose();
         persistence?.Dispose();
         rotationTimer?.Stop();
         session?.Dispose();

@@ -12,10 +12,11 @@ internal static class WindowMaximization
     public static void Attach(Window window)
     {
         var source = (HwndSource)PresentationSource.FromVisual(window);
-        source.AddHook(UpdateMaximizedBounds);
+        source.AddHook((nint handle, int message, nint wParam, nint lParam, ref bool handled) =>
+            UpdateWindowBounds(window, handle, message, lParam, ref handled));
     }
 
-    private static nint UpdateMaximizedBounds(nint window, int message, nint wParam, nint lParam, ref bool handled)
+    private static nint UpdateWindowBounds(Window window, nint handle, int message, nint lParam, ref bool handled)
     {
 
         if (message != GetMinMaxInfoMessage)
@@ -24,7 +25,7 @@ internal static class WindowMaximization
             return 0;
         }
 
-        nint monitor = MonitorFromWindow(window, NearestMonitor);
+        nint monitor = MonitorFromWindow(handle, NearestMonitor);
         var monitorInfo = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
 
         if (monitor == 0 || !GetMonitorInfo(monitor, ref monitorInfo))
@@ -38,6 +39,11 @@ internal static class WindowMaximization
         bounds.MaxPosition.Y = monitorInfo.WorkArea.Top - monitorInfo.Screen.Top;
         bounds.MaxSize.X = monitorInfo.WorkArea.Right - monitorInfo.WorkArea.Left;
         bounds.MaxSize.Y = monitorInfo.WorkArea.Bottom - monitorInfo.WorkArea.Top;
+        var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(window);
+        bounds.MinTrackSize.X = Math.Min(bounds.MaxSize.X,
+            Math.Max(bounds.MinTrackSize.X, (int)Math.Ceiling(window.MinWidth * dpi.DpiScaleX)));
+        bounds.MinTrackSize.Y = Math.Min(bounds.MaxSize.Y,
+            Math.Max(bounds.MinTrackSize.Y, (int)Math.Ceiling(window.MinHeight * dpi.DpiScaleY)));
         Marshal.StructureToPtr(bounds, lParam, fDeleteOld: false);
         handled = true;
 

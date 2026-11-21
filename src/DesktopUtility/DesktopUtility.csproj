@@ -6,11 +6,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <Version>0.2.10</Version>
+    <Version>0.3.5</Version>
     <ApplicationIcon>Assets/DesktopUtility.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../DesktopUtility.Core/DesktopUtility.Core.csproj" />
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
+    <None Include="../../licenses/**/*" Link="licenses/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Resource Include="Assets/DesktopUtility.ico" />
     <InternalsVisibleTo Include="DesktopUtility.Wpf.Tests" />
     <Using Remove="System.Windows.Forms" />

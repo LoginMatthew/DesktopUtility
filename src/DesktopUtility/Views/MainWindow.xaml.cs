@@ -15,14 +15,16 @@ public partial class MainWindow : Window
     private readonly SettingsViewModel settings;
     private readonly GalleryViewModel galleryModel;
     private readonly GalleryView gallery;
+    private readonly MonitoringViewModel monitoring;
     private string activePage = "Gallery";
 
-    internal MainWindow(WallpaperSession session, Language words, SettingsViewModel settings, GalleryViewModel galleryModel)
+    internal MainWindow(WallpaperSession session, Language words, SettingsViewModel settings, GalleryViewModel galleryModel, MonitoringViewModel monitoring)
     {
         this.session = session;
         this.words = words;
         this.settings = settings;
         this.galleryModel = galleryModel;
+        this.monitoring = monitoring;
         InitializeComponent();
         SourceInitialized += (_, _) =>
         {
@@ -39,6 +41,7 @@ public partial class MainWindow : Window
             status.Dispose();
         };
 
+        StateChanged += (_, _) => UpdateMonitoringVisibility();
         IsVisibleChanged += (_, _) =>
         {
 
@@ -49,6 +52,7 @@ public partial class MainWindow : Window
             else
             {
                 gallery.CancelLoading();
+                monitoring.SetViewing(false);
             }
         };
     }
@@ -66,10 +70,11 @@ public partial class MainWindow : Window
     internal void Render()
     {
         gallery.CancelLoading();
+        UpdateMonitoringVisibility();
         UpdateCaptionLabels();
         Navigation.Children.Clear();
 
-        foreach (string page in new[] { "Gallery", "Settings", "About" })
+        foreach (string page in new[] { "Gallery", "Monitoring", "Settings", "About" })
         {
             var button = Button(words[page], () =>
             {
@@ -86,21 +91,32 @@ public partial class MainWindow : Window
             Navigation.Children.Add(button);
         }
 
-        if (activePage is "Gallery" or "Settings")
+        HelpTopic? topic = activePage switch
         {
-            HelpTopic topic = activePage == "Gallery" ? HelpTopic.Gallery : HelpTopic.Settings;
-            Navigation.Children.Add(Button(words["PageHelp"], () => ShowPageHelp(topic)));
+            "Gallery" => HelpTopic.Gallery,
+            "Settings" => HelpTopic.Settings,
+            "Monitoring" => HelpTopic.Monitoring,
+            _ => null
+        };
+
+        if (topic is { } pageTopic)
+        {
+            Navigation.Children.Add(Button(words["PageHelp"], () => ShowPageHelp(pageTopic)));
         }
 
         ContentHost.Children.Clear();
         ContentHost.Children.Add(activePage switch
         {
+            "Monitoring" => new MonitoringView(monitoring),
             "Settings" => new SettingsView(settings, session),
             "About" => new AboutView(new AboutViewModel(words)),
             _ => gallery.Build()
         });
         status.Refresh();
     }
+
+    private void UpdateMonitoringVisibility() =>
+        monitoring.SetViewing(IsVisible && WindowState != WindowState.Minimized && activePage == "Monitoring");
 
     private void ShowPageHelp(HelpTopic topic)
     {

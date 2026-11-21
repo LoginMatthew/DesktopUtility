@@ -1,0 +1,37 @@
+<UserControl x:Class="DesktopUtility.Views.FpsMonitoringView"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+ <Expander Header="{Binding Words[FpsTitle]}" Margin="0,10,10,0" Padding="8"
+           Foreground="{DynamicResource AppText}">
+  <StackPanel Margin="0,4,0,0">
+   <TextBlock Text="{Binding Words[FpsHelp]}" TextWrapping="Wrap" Margin="0,0,0,10" />
+   <WrapPanel>
+    <Button Content="{Binding Words[FpsDownloadPresentMon]}" Click="OpenPresentMonDownload" />
+    <Button Content="{Binding Words[FpsChoosePresentMon]}" Click="ChooseExecutable" />
+    <Button Content="{Binding Words[FpsRefreshWindows]}" Click="RefreshWindows" />
+   </WrapPanel>
+   <TextBlock Text="{Binding ExecutablePath}" TextTrimming="CharacterEllipsis" ToolTip="{Binding ExecutablePath}"
+              Margin="0,4,0,8" />
+   <TextBlock x:Name="Notice" TextWrapping="Wrap" />
+   <ItemsControl ItemsSource="{Binding Monitors}">
+    <ItemsControl.ItemTemplate>
+     <DataTemplate>
+      <Border Background="{DynamicResource WindowSurface}" BorderBrush="{DynamicResource ChromeStroke}"
+              BorderThickness="1" CornerRadius="10" Padding="11" Margin="0,0,0,8">
+       <StackPanel>
+        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Margin="0,0,0,6" />
+        <ComboBox ItemsSource="{Binding Windows}" SelectedItem="{Binding SelectedWindow, Mode=TwoWay}"
+                  DisplayMemberPath="Title" AutomationProperties.Name="{Binding WindowLabel}" />
+        <WrapPanel>
+         <CheckBox Content="{Binding ToggleLabel}" IsChecked="{Binding Measuring, Mode=TwoWay}" IsEnabled="{Binding CanCapture}" />
+         <TextBlock Text="{Binding Value}" FontSize="17" FontWeight="SemiBold" Foreground="{DynamicResource Accent}"
+                    VerticalAlignment="Center" TextWrapping="Wrap" />
+        </WrapPanel>
+       </StackPanel>
+      </Border>
+     </DataTemplate>
+    </ItemsControl.ItemTemplate>
+   </ItemsControl>
+  </StackPanel>
+ </Expander>
+</UserControl>

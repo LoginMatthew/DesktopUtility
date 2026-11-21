@@ -1,4 +1,5 @@
 using System.IO;
+using DesktopUtility.Core.Monitoring;
 using DesktopUtility.Infrastructure.Persistence;
 using DesktopUtility.Models;
 using Xunit;
@@ -77,6 +78,35 @@ public sealed class SettingsStoreTests
             Assert.Contains("SECOND.jpg", restored.MonitorPools["left"]);
             Assert.Equal("third.jpg", Assert.Single(restored.MonitorPools["right"]));
             Assert.Equal("favorite.jpg", restored.MonitorFavorites["left"]);
+        });
+    }
+
+    [Fact]
+    public void MonitoringStartsDisabledAndRetainsTheSelectedMetricsAfterReload()
+    {
+        WithTemporarySettings((store, path) =>
+        {
+            File.WriteAllText(path, """{"Language":"hu"}""");
+            var settings = store.Load();
+            Assert.False(settings.MonitoringEnabled);
+            Assert.Equal(SystemMetric.All, settings.MonitoringMetrics);
+            Assert.True(settings.MonitorAllDisks);
+
+            settings.MonitoringEnabled = true;
+            settings.MonitoringMetrics = SystemMetric.Cpu | SystemMetric.IntegratedGpu | SystemMetric.Network;
+            settings.ShowMonitoringCharts = true;
+            settings.PresentMonPath = @"C:\Tools\PresentMon.exe";
+            settings.MonitorAllDisks = false;
+            settings.MonitoredDriveRoots.Add("C:\\");
+            store.Save(settings);
+            var restored = new SettingsStore(path).Load();
+
+            Assert.True(restored.MonitoringEnabled);
+            Assert.Equal(SystemMetric.Cpu | SystemMetric.IntegratedGpu | SystemMetric.Network, restored.MonitoringMetrics);
+            Assert.True(restored.ShowMonitoringCharts);
+            Assert.Equal(@"C:\Tools\PresentMon.exe", restored.PresentMonPath);
+            Assert.False(restored.MonitorAllDisks);
+            Assert.Contains("c:\\", restored.MonitoredDriveRoots);
         });
     }
 

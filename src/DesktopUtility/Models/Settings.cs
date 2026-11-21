@@ -1,3 +1,5 @@
+using DesktopUtility.Core.Monitoring;
+
 namespace DesktopUtility.Models;
 
 internal sealed class Settings
@@ -12,6 +14,12 @@ internal sealed class Settings
     public bool SelectedOnly { get; set; }
     public bool SeparateMonitors { get; set; }
     public bool RotationEnabled { get; set; }
+    public bool ShowMonitoringCharts { get; set; }
+    public string? PresentMonPath { get; set; }
+    public bool MonitoringEnabled { get; set; }
+    public SystemMetric MonitoringMetrics { get; set; } = SystemMetric.All;
+    public bool MonitorAllDisks { get; set; } = true;
+    public HashSet<string> MonitoredDriveRoots { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public int IntervalMinutes { get; set; } = 30;
     public double AccentHue { get; set; } = 165;
     public double TextHue { get; set; } = 210;

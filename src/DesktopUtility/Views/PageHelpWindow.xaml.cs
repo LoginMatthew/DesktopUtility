@@ -10,4 +10,6 @@ public partial class PageHelpWindow : Window
         Owner = owner;
         DataContext = viewModel;
     }
+
+    private void CloseHelp(object sender, RoutedEventArgs args) => Close();
 }

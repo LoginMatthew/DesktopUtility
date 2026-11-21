@@ -12,6 +12,9 @@
    </StackPanel>
    <TextBlock Text="{Binding Words[AboutDescription]}" TextWrapping="Wrap" />
    <TextBlock Text="{Binding Words[IconCredit]}" TextWrapping="Wrap" Margin="0,8,0,0" />
+   <TextBlock Text="{Binding Words[ExternalComponents]}" FontSize="21" FontWeight="SemiBold" Margin="0,20,0,8" />
+   <TextBlock Text="{Binding Words[TemperatureLibraryCredit]}" TextWrapping="Wrap" Margin="0,0,0,6" />
+   <TextBlock Text="{Binding Words[PresentMonCredit]}" TextWrapping="Wrap" />
    <TextBlock Text="{Binding Words[Usage]}" FontSize="21" FontWeight="SemiBold" Margin="0,20,0,8" />
    <ItemsControl ItemsSource="{Binding UsageSteps}">
     <ItemsControl.ItemTemplate>

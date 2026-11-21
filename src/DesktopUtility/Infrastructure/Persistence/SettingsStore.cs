@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using DesktopUtility.Core.Monitoring;
 
 namespace DesktopUtility.Infrastructure.Persistence;
 
@@ -16,6 +17,9 @@ internal sealed class SettingsStore(string path)
 
         var settings = JsonSerializer.Deserialize<Settings>(File.ReadAllText(path)) ?? new Settings();
         settings.IntervalMinutes = Math.Clamp(settings.IntervalMinutes, 1, 1440);
+        settings.MonitoringMetrics &= SystemMetric.All;
+        settings.MonitoredDriveRoots = new HashSet<string>(
+            (settings.MonitoredDriveRoots ?? []).Where(root => !string.IsNullOrWhiteSpace(root)), StringComparer.OrdinalIgnoreCase);
         settings.Opacity = Math.Clamp(settings.Opacity, 0.55, 1);
         settings.PanelOpacity = Math.Clamp(settings.PanelOpacity, 0, 1);
         settings.Folder ??= "";
