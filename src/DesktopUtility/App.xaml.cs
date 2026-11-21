@@ -142,13 +142,7 @@ public partial class App : Application
         quickPanel?.Close();
     }
 
-    private void ShowDashboard()
-    {
-        quickPanel?.Close();
-        dashboard!.Show();
-        dashboard.WindowState = WindowState.Normal;
-        dashboard.Activate();
-    }
+    private void ShowDashboard() => TrayWindowNavigation.OpenDashboard(dashboard!, quickPanel);
 
     private void HideDashboard(object? sender, CancelEventArgs args)
     {

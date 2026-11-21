@@ -9,14 +9,15 @@
  <shell:WindowChrome.WindowChrome>
   <shell:WindowChrome CaptionHeight="52" ResizeBorderThickness="6" GlassFrameThickness="0" />
  </shell:WindowChrome.WindowChrome>
- <Border Background="{DynamicResource WindowSurface}" BorderBrush="{DynamicResource ChromeStroke}" BorderThickness="1">
+ <Border Background="{DynamicResource WindowSurface}" BorderBrush="{DynamicResource ChromeStroke}">
   <Border.Style>
    <Style TargetType="Border">
     <Setter Property="CornerRadius" Value="17" />
+    <Setter Property="BorderThickness" Value="1" />
     <Style.Triggers>
      <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
       <Setter Property="CornerRadius" Value="0" />
-      <Setter Property="Margin" Value="8" />
+      <Setter Property="BorderThickness" Value="0" />
      </DataTrigger>
     </Style.Triggers>
    </Style>

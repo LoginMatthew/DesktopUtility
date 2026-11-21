@@ -8,9 +8,8 @@ internal sealed class AboutViewModel(Language language)
 
     public IReadOnlyList<string> UsageSteps =>
     [
-        language["UsageFolder"],
-        language["UsageApply"],
-        language["UsageRotation"],
+        .. PageHelpViewModel.GallerySteps(language),
+        .. PageHelpViewModel.SettingsSteps(language),
         language["UsageTray"]
     ];
 }

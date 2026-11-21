@@ -4,7 +4,8 @@ public enum WallpaperActionResult
 {
     Skipped,
     Applied,
-    Failed
+    Failed,
+    AccessDenied
 }
 
 public sealed class WallpaperRotationCoordinator(IWallpaperService wallpaper, TimeProvider clock)
@@ -14,6 +15,7 @@ public sealed class WallpaperRotationCoordinator(IWallpaperService wallpaper, Ti
     private readonly object stateGate = new();
     private readonly SemaphoreSlim actionGate = new(1);
     private IReadOnlyList<string> candidates = [];
+    private IReadOnlyDictionary<string, IReadOnlyList<string>> pools = new Dictionary<string, IReadOnlyList<string>>();
     private int pendingActions;
     private bool enabled;
     private bool separateMonitors;
@@ -37,12 +39,18 @@ public sealed class WallpaperRotationCoordinator(IWallpaperService wallpaper, Ti
         bool selectedOnly,
         bool enabled,
         int intervalMinutes,
-        bool separateMonitors)
+        bool separateMonitors,
+        IEnumerable<MonitorWallpaperPool>? monitorPools = null)
     {
         var updatedCandidates = selectedOnly ? images.Where(selected.Contains).ToArray() : images.ToArray();
+        var updatedPools = (monitorPools ?? []).Where(pool => pool.Images.Count > 0).ToDictionary(
+            pool => pool.MonitorId,
+            pool => (IReadOnlyList<string>)pool.Images.ToArray(),
+            StringComparer.OrdinalIgnoreCase);
         lock (stateGate)
         {
             candidates = updatedCandidates;
+            pools = updatedPools;
             this.enabled = enabled;
             this.intervalMinutes = intervalMinutes;
             this.separateMonitors = separateMonitors;
@@ -54,6 +62,7 @@ public sealed class WallpaperRotationCoordinator(IWallpaperService wallpaper, Ti
     {
         IReadOnlyList<string> currentCandidates;
         bool useSeparateMonitors;
+        IReadOnlyDictionary<string, IReadOnlyList<string>> currentPools;
         lock (stateGate)
         {
 
@@ -65,10 +74,11 @@ public sealed class WallpaperRotationCoordinator(IWallpaperService wallpaper, Ti
 
             currentCandidates = candidates;
             useSeparateMonitors = separateMonitors;
+            currentPools = pools;
             BeginAction();
         }
 
-        return RunAsync(() => rotation.AdvanceAsync(currentCandidates, useSeparateMonitors));
+        return RunAsync(() => rotation.AdvanceAsync(currentCandidates, useSeparateMonitors, currentPools));
     }
 
     public Task<WallpaperActionResult> ApplyAsync(string path, string? monitorId)
@@ -78,12 +88,26 @@ public sealed class WallpaperRotationCoordinator(IWallpaperService wallpaper, Ti
             BeginAction();
         }
 
-        return RunAsync(async () =>
-        {
-            await wallpaper.ApplyAsync(path, monitorId).ConfigureAwait(false);
+        return RunAsync(() => rotation.ApplyAsync(path, monitorId));
+    }
 
-            return WallpaperActionResult.Applied;
-        });
+    public Task<WallpaperActionResult> ApplyRandomAsync(string monitorId)
+    {
+        IReadOnlyList<string> pool;
+        lock (stateGate)
+        {
+
+            if (!pools.TryGetValue(monitorId, out var configuredPool))
+            {
+
+                return Task.FromResult(WallpaperActionResult.Skipped);
+            }
+
+            pool = configuredPool;
+            BeginAction();
+        }
+
+        return RunAsync(() => rotation.ApplyRandomAsync(pool, monitorId));
     }
 
     public Task<WallpaperActionResult> ApplyAssignmentsAsync(IReadOnlyList<MonitorWallpaperAssignment> assignments)
@@ -118,6 +142,11 @@ public sealed class WallpaperRotationCoordinator(IWallpaperService wallpaper, Ti
 
             return await action().ConfigureAwait(false);
         }
+        catch (WallpaperAccessDeniedException)
+        {
+
+            return WallpaperActionResult.AccessDenied;
+        }
         catch (Exception error) when (error is WallpaperOperationException or OperationCanceledException)
         {
 
@@ -134,5 +163,9 @@ public sealed class WallpaperRotationCoordinator(IWallpaperService wallpaper, Ti
         }
     }
 
-    private void RestartSchedule() => schedule.Restart(enabled, candidates.Count, intervalMinutes);
+    private void RestartSchedule()
+    {
+        bool hasImages = candidates.Count > 0 || (separateMonitors && pools.Count > 0);
+        schedule.Restart(enabled, hasImages ? 1 : 0, intervalMinutes);
+    }
 }

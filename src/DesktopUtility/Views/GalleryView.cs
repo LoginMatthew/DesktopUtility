@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Microsoft.Win32;
 using static DesktopUtility.PresentationControls.Controls;
 
@@ -11,10 +12,19 @@ namespace DesktopUtility.Views;
 internal sealed class GalleryView(Window owner, GalleryViewModel viewModel, Language words, Action render)
 {
     private CancellationTokenSource? thumbnailLoad;
-    public void CancelLoading() => thumbnailLoad?.Cancel();
+    private int viewVersion;
+    private string[] highlightedPaths = [];
+
+    public void CancelLoading()
+    {
+        viewVersion++;
+        thumbnailLoad?.Cancel();
+    }
 
     public FrameworkElement Build()
     {
+        int currentVersion = ++viewVersion;
+        var previousSelection = highlightedPaths.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var layout = new DockPanel();
         var header = new StackPanel();
 
@@ -55,20 +65,25 @@ internal sealed class GalleryView(Window owner, GalleryViewModel viewModel, Lang
         toolbar.Children.Add(Button(words["SelectAllImages"], () => SetAllSelected(true)));
         toolbar.Children.Add(Button(words["ClearSelectedImages"], () => SetAllSelected(false)));
 
+        IReadOnlyList<MonitorTarget> visibleMonitors = [];
+        var monitorBadges = new List<(string Path, TextBlock Label)>();
         var connectedMonitors = viewModel.GetMonitorsAsync();
-        var monitorAssignments = new MonitorAssignmentsView(viewModel, words, connectedMonitors);
+        var monitorAssignments = new MonitorAssignmentsView(viewModel, words, connectedMonitors, id =>
+        {
+            viewModel.SelectMonitor(id);
+            viewModel.SetMonitorFilter(GalleryMonitorFilter.InPool);
+            render();
+        });
+
+        var poolControls = new MonitorPoolControls(viewModel, words, render, RefreshMonitorSelections);
+        header.Children.Add(poolControls);
         header.Children.Add(monitorAssignments);
+        monitorAssignments.SelectionsChanged += UpdateMonitorBadges;
 
         var operations = new WrapPanel();
 
         DockPanel.SetDock(operations, Dock.Bottom);
         layout.Children.Add(operations);
-
-        var monitors = new ComboBox { MinWidth = 115 };
-        monitors.Items.Add(new MonitorTarget(null, words["All"]));
-
-        _ = PopulateMonitorsAsync(monitors, connectedMonitors);
-        monitors.SelectedIndex = 0;
 
         int lastPage = viewModel.LastPage;
 
@@ -93,11 +108,11 @@ internal sealed class GalleryView(Window owner, GalleryViewModel viewModel, Lang
         operations.Children.Add(previous);
         operations.Children.Add(Label($"{viewModel.PageIndex + 1} / {lastPage + 1}   "));
         operations.Children.Add(next);
-        operations.Children.Add(monitors);
 
         var items = new ListBox
         {
             Background = Brushes.Transparent,
+            SelectionMode = SelectionMode.Extended,
             BorderThickness = new Thickness(0),
             Margin = new Thickness(0, 0, 0, 9),
             ItemsPanel = new ItemsPanelTemplate(new FrameworkElementFactory(typeof(WrapPanel)))
@@ -107,9 +122,36 @@ internal sealed class GalleryView(Window owner, GalleryViewModel viewModel, Lang
         ScrollViewer.SetHorizontalScrollBarVisibility(items, ScrollBarVisibility.Disabled);
         ScrollViewer.SetVerticalScrollBarVisibility(items, ScrollBarVisibility.Auto);
 
-        string? CurrentPath() => (items.SelectedItem as ListBoxItem)?.Tag as string;
-        var apply = Button(words["Apply"], () => viewModel.Apply(CurrentPath(), (monitors.SelectedItem as MonitorTarget)?.Id));
-        var favorite = Button(words["Favorite"], () => viewModel.SetFavorite(CurrentPath()));
+        string? CurrentPath() => items.SelectedItems.Count == 1 ? (items.SelectedItem as ListBoxItem)?.Tag as string : null;
+        var apply = Button(words["Apply"], () =>
+        {
+            viewModel.Apply(CurrentPath(), viewModel.TargetMonitorId);
+            monitorAssignments.UpdateRows();
+            UpdateMonitorBadges();
+        });
+
+        var favoriteBadges = new List<(string Path, TextBlock Label)>();
+        var favoriteSummary = Label("");
+        favoriteSummary.SetResourceReference(TextBlock.ForegroundProperty, "Accent");
+        header.Children.Insert(header.Children.IndexOf(monitorAssignments), favoriteSummary);
+        var favorite = Button(words["Favorite"], () =>
+        {
+            viewModel.SetFavorite(CurrentPath());
+            UpdateFavorite();
+        });
+
+        void UpdateFavorite()
+        {
+            string? path = viewModel.FavoritePath;
+            favoriteSummary.Text = path is null ? "" : $"★ {words["FavoriteBadge"]} · {Path.GetFileName(path)}";
+            favoriteSummary.ToolTip = path;
+            favoriteSummary.Visibility = path is null ? Visibility.Collapsed : Visibility.Visible;
+
+            foreach (var (imagePath, badge) in favoriteBadges)
+            {
+                badge.Visibility = viewModel.IsFavorite(imagePath) ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
 
         apply.IsEnabled = favorite.IsEnabled = false;
         items.SelectionChanged += (_, _) =>
@@ -117,6 +159,8 @@ internal sealed class GalleryView(Window owner, GalleryViewModel viewModel, Lang
             string? path = CurrentPath();
             apply.IsEnabled = favorite.IsEnabled = path is not null;
             monitorAssignments.SetSelectedImage(path);
+            highlightedPaths = items.SelectedItems.Cast<ListBoxItem>().Select(item => (string)item.Tag).ToArray();
+            poolControls.SetSelectedImages(highlightedPaths);
         };
 
         operations.Children.Add(apply);
@@ -132,28 +176,80 @@ internal sealed class GalleryView(Window owner, GalleryViewModel viewModel, Lang
             card.Children.Add(new TextBlock { Text = Path.GetFileName(path), ToolTip = path, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 5, 0, 1) });
             var details = new TextBlock { Text = words["PreviewLoading"], FontSize = 12, TextWrapping = TextWrapping.Wrap };
             card.Children.Add(details);
+            var favoriteBadge = new TextBlock { Text = $"★ {words["FavoriteBadge"]}", FontWeight = FontWeights.SemiBold };
+            favoriteBadge.SetResourceReference(TextBlock.ForegroundProperty, "Accent");
+            card.Children.Add(favoriteBadge);
+            var monitorBadge = new TextBlock { FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
+            monitorBadge.SetResourceReference(TextBlock.ForegroundProperty, "Accent");
+            card.Children.Add(monitorBadge);
+            monitorBadges.Add((path, monitorBadge));
+            favoriteBadges.Add((path, favoriteBadge));
             var include = CheckBox("✓", viewModel.Includes(path), value => viewModel.Include(path, value));
             include.ToolTip = words["Include"];
             System.Windows.Automation.AutomationProperties.SetName(include, words["Include"]);
             card.Children.Add(include);
             selectionChecks.Add((path, include));
-            items.Items.Add(new ListBoxItem { Content = card, Tag = path, Margin = new Thickness(0, 0, 7, 7) });
+            var item = new ListBoxItem { Content = card, Tag = path, Margin = new Thickness(0, 0, 7, 7) };
+            items.Items.Add(item);
+
+            if (previousSelection.Contains(path))
+            {
+                items.SelectedItems.Add(item);
+            }
+
             thumbnails.Add((path, thumbnail, details));
         }
 
-        layout.Children.Add(items);
+        UpdateFavorite();
+        _ = LoadGalleryMonitorsAsync();
+        layout.Children.Add(items.Items.Count > 0 ? items : Label(words["NoMonitorFilterResults"]));
         thumbnailLoad = new CancellationTokenSource();
         _ = LoadThumbnailsAsync(thumbnails, thumbnailLoad);
 
         return layout;
-    }
-
-    private static async Task PopulateMonitorsAsync(ComboBox monitors, Task<IReadOnlyList<MonitorTarget>> connectedMonitors)
-    {
-
-        foreach (var monitor in await connectedMonitors)
+        async Task LoadGalleryMonitorsAsync()
         {
-            monitors.Items.Add(monitor);
+            await Dispatcher.Yield(DispatcherPriority.Loaded);
+            visibleMonitors = await connectedMonitors;
+
+            if (currentVersion != viewVersion)
+            {
+
+                return;
+            }
+
+            poolControls.SetMonitors(visibleMonitors);
+            UpdateMonitorBadges();
+        }
+
+        void RefreshMonitorSelections()
+        {
+            monitorAssignments.UpdateRows();
+            UpdateMonitorBadges();
+        }
+
+        void UpdateMonitorBadges()
+        {
+
+            foreach (var (path, label) in monitorBadges)
+            {
+                string assignment = FormatMonitorLabels(path, viewModel.GetWallpaperAssignment, "MonitorBadge");
+                string favorite = FormatMonitorLabels(path, viewModel.GetMonitorFavorite, "MonitorFavoriteBadge");
+                string pools = FormatMonitorLabels(path, id => viewModel.IsInMonitorPool(id, path) ? path : null, "MonitorPoolBadge");
+                label.Text = string.Join(Environment.NewLine, new[] { assignment, favorite, pools }.Where(text => text.Length > 0));
+                label.Visibility = label.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
+        string FormatMonitorLabels(string path, Func<string, string?> findImage, string labelKey)
+        {
+            var matchingMonitors = visibleMonitors
+                .Where(monitor => monitor.Id is { } id && string.Equals(findImage(id), path, StringComparison.OrdinalIgnoreCase))
+                .Select(monitor => monitor.Number is { } number
+                    ? string.Format(CultureInfo.GetCultureInfo(words.Code), words[labelKey], number)
+                    : labelKey == "MonitorFavoriteBadge" ? $"{words["FavoriteBadge"]} · {monitor.Name}" : monitor.Name);
+            string text = string.Join(" · ", matchingMonitors);
+
+            return labelKey == "MonitorFavoriteBadge" && text.Length > 0 ? $"★ {text}" : text;
         }
     }
 

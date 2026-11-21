@@ -102,6 +102,101 @@ public sealed class WallpaperRotationCoordinatorTests
         Assert.Equal(TimeSpan.FromMinutes(3), coordinator.Remaining);
     }
 
+    [Fact]
+    public async Task RotationSkipsAnUnavailableImageAndUsesTheNextOneImmediately()
+    {
+        wallpaper.UnavailableImage = "one.jpg";
+        Configure();
+        clock.Advance(TimeSpan.FromMinutes(5));
+
+        Assert.Equal(WallpaperActionResult.Applied, await coordinator.TickAsync());
+        Assert.Equal(("two.jpg", null), Assert.Single(wallpaper.Applied));
+    }
+
+    [Fact]
+    public async Task RotationReportsFailureWhenAllImagesAreUnavailable()
+    {
+        wallpaper.UnavailableImage = "one.jpg";
+        Configure(selected: new HashSet<string> { "one.jpg" });
+        clock.Advance(TimeSpan.FromMinutes(5));
+
+        Assert.Equal(WallpaperActionResult.Failed, await coordinator.TickAsync());
+        Assert.Empty(wallpaper.Applied);
+    }
+
+    [Fact]
+    public async Task RotationKeepsDifferentImagesOnTwoMonitorsAfterSkippingAnUnavailableImage()
+    {
+        wallpaper.UnavailableImage = "one.jpg";
+        Configure(separateMonitors: true);
+        clock.Advance(TimeSpan.FromMinutes(5));
+
+        Assert.Equal(WallpaperActionResult.Applied, await coordinator.TickAsync());
+        Assert.Collection(wallpaper.Applied,
+            item => Assert.Equal(("two.jpg", "left"), item),
+            item => Assert.Equal(("three.jpg", "right"), item));
+    }
+
+    [Fact]
+    public async Task DeniedWallpaperAccessIsDistinguishedFromAnUnavailableImage()
+    {
+        wallpaper.DenyAccess = true;
+        Configure();
+        clock.Advance(TimeSpan.FromMinutes(5));
+
+        Assert.Equal(WallpaperActionResult.AccessDenied, await coordinator.TickAsync());
+        Assert.Empty(wallpaper.Applied);
+    }
+
+    [Fact]
+    public async Task SeparateRotationUsesEachMonitorsPoolAndAvoidsImmediateRepeats()
+    {
+        coordinator.Configure([], new HashSet<string>(), selectedOnly: true, enabled: true, intervalMinutes: 1,
+            separateMonitors: true, monitorPools:
+            [
+                new("left", ["left-a.jpg", "left-b.jpg"]),
+                new("right", ["right-a.jpg", "right-b.jpg"])
+            ]);
+
+        clock.Advance(TimeSpan.FromMinutes(1));
+        Assert.Equal(WallpaperActionResult.Applied, await coordinator.TickAsync());
+        clock.Advance(TimeSpan.FromMinutes(1));
+        Assert.Equal(WallpaperActionResult.Applied, await coordinator.TickAsync());
+
+        Assert.Equal(4, wallpaper.Applied.Count);
+        Assert.All(wallpaper.Applied.Where(item => item.MonitorId == "left"), item => Assert.StartsWith("left-", item.Path));
+        Assert.All(wallpaper.Applied.Where(item => item.MonitorId == "right"), item => Assert.StartsWith("right-", item.Path));
+        Assert.Equal(2, wallpaper.Applied.Count(item => item.MonitorId == "left"));
+        Assert.Equal(2, wallpaper.Applied.Count(item => item.MonitorId == "right"));
+        Assert.Equal(4, wallpaper.Applied.Select(item => item.Path).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task AMonitorWithoutAPoolUsesTheGeneralRotationSelection()
+    {
+        coordinator.Configure(["general.jpg"], new HashSet<string>(), selectedOnly: false, enabled: true, intervalMinutes: 1,
+            separateMonitors: true, monitorPools: [new("left", ["private.jpg"])]);
+        clock.Advance(TimeSpan.FromMinutes(1));
+
+        Assert.Equal(WallpaperActionResult.Applied, await coordinator.TickAsync());
+        Assert.Collection(wallpaper.Applied,
+            item => Assert.Equal(("private.jpg", "left"), item),
+            item => Assert.Equal(("general.jpg", "right"), item));
+    }
+
+    [Fact]
+    public async Task ManualRandomChoosesFromTheRequestedPoolWhileRotationIsPaused()
+    {
+        wallpaper.UnavailableImage = "missing.jpg";
+        coordinator.Configure(["general.jpg"], new HashSet<string>(), selectedOnly: false, enabled: false, intervalMinutes: 1,
+            separateMonitors: false, monitorPools: [new("left", ["missing.jpg", "private.jpg"])]);
+
+        Assert.Equal(WallpaperActionResult.Skipped, await coordinator.ApplyRandomAsync("right"));
+        Assert.Equal(WallpaperActionResult.Applied, await coordinator.ApplyRandomAsync("left"));
+        Assert.Equal(("private.jpg", "left"), Assert.Single(wallpaper.Applied));
+        Assert.Null(coordinator.Remaining);
+    }
+
     private void Configure(int interval = 5, bool enabled = true, bool separateMonitors = false, IReadOnlySet<string>? selected = null)
     {
         coordinator.Configure(["one.jpg", "two.jpg", "three.jpg"], selected ?? new HashSet<string>(),
@@ -121,6 +216,8 @@ public sealed class WallpaperRotationCoordinatorTests
     {
         public List<(string Path, string? MonitorId)> Applied { get; } = [];
         public string? FailingMonitor { get; set; }
+        public string? UnavailableImage { get; set; }
+        public bool DenyAccess { get; set; }
 
         public Task<IReadOnlyList<MonitorTarget>> GetMonitorsAsync() =>
             Task.FromResult<IReadOnlyList<MonitorTarget>>([new("left", "Left"), new("right", "Right")]);
@@ -131,6 +228,16 @@ public sealed class WallpaperRotationCoordinatorTests
             if (monitorId is not null && monitorId == FailingMonitor)
             {
                 throw new WallpaperOperationException(new IOException("Simulated monitor failure."));
+            }
+
+            if (DenyAccess)
+            {
+                throw new WallpaperAccessDeniedException(new UnauthorizedAccessException());
+            }
+
+            if (filePath == UnavailableImage)
+            {
+                throw new WallpaperImageException(new IOException("Simulated unavailable image."));
             }
 
             Applied.Add((filePath, monitorId));

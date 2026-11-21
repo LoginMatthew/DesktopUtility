@@ -1,11 +1,20 @@
 namespace DesktopUtility.Services;
 
-internal sealed class WallpaperSession(Settings settings, IWallpaperService wallpaper, TimeProvider clock) : IDisposable
+internal sealed class WallpaperSession : IDisposable
 {
-    private readonly WallpaperRotationCoordinator rotation = new(wallpaper, clock);
+    private readonly IWallpaperService wallpaper;
+    private readonly WallpaperRotationCoordinator rotation;
     private bool disposed;
 
-    public Settings Settings { get; } = settings;
+    public WallpaperSession(Settings settings, IWallpaperService wallpaper, TimeProvider clock)
+    {
+        Settings = settings;
+        this.wallpaper = wallpaper;
+        rotation = new WallpaperRotationCoordinator(wallpaper, clock);
+        RefreshSchedule();
+    }
+
+    public Settings Settings { get; }
     public IReadOnlyList<string> Images { get; private set; } = [];
     public string? MessageKey { get; set; }
     public event Action? Changed;
@@ -80,8 +89,74 @@ internal sealed class WallpaperSession(Settings settings, IWallpaperService wall
         Save();
     }
 
+    public void SetMonitorAssignment(string monitorId, string path)
+    {
+        Settings.MonitorAssignments[monitorId] = path;
+        Save();
+    }
+
+    public void ClearMonitorAssignment(string monitorId)
+    {
+
+        if (Settings.MonitorAssignments.Remove(monitorId))
+        {
+            Save();
+        }
+    }
+
+    public void SetMonitorFavorite(string monitorId, string path)
+    {
+        Settings.MonitorFavorites[monitorId] = path;
+        Save();
+    }
+
+    public void ClearMonitorFavorite(string monitorId)
+    {
+
+        if (Settings.MonitorFavorites.Remove(monitorId))
+        {
+            Save();
+        }
+    }
+
+    public void ChangeMonitorPool(string monitorId, IEnumerable<string> paths, bool include)
+    {
+        var pool = Settings.MonitorPools.GetValueOrDefault(monitorId) ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int previousCount = pool.Count;
+
+        if (include)
+        {
+            pool.UnionWith(paths);
+        }
+        else
+        {
+            pool.ExceptWith(paths);
+        }
+
+        if (pool.Count == previousCount)
+        {
+
+            return;
+        }
+
+        if (pool.Count == 0)
+        {
+            Settings.MonitorPools.Remove(monitorId);
+        }
+        else
+        {
+            Settings.MonitorPools[monitorId] = pool;
+        }
+
+        RefreshSchedule();
+        Save();
+    }
+
+    public void ApplyRandomFromPool(string monitorId) =>
+        _ = UpdateAfterActionAsync(rotation.ApplyRandomAsync(monitorId), showConfirmation: true);
+
     public void ApplyMonitorAssignments(IReadOnlyList<MonitorWallpaperAssignment> assignments) =>
-        _ = UpdateAfterActionAsync(rotation.ApplyAssignmentsAsync(assignments));
+        _ = UpdateAfterActionAsync(rotation.ApplyAssignmentsAsync(assignments), showConfirmation: true);
 
     public void SetFavorite(string? path)
     {
@@ -118,6 +193,13 @@ internal sealed class WallpaperSession(Settings settings, IWallpaperService wall
 
             return await wallpaper.GetMonitorsAsync();
         }
+        catch (WallpaperAccessDeniedException)
+        {
+            MessageKey = "WallpaperAccessDenied";
+            NotifyState();
+
+            return [];
+        }
         catch (Exception error) when (error is WallpaperOperationException or OperationCanceledException)
         {
 
@@ -136,7 +218,7 @@ internal sealed class WallpaperSession(Settings settings, IWallpaperService wall
             return;
         }
 
-        _ = UpdateAfterActionAsync(rotation.ApplyAsync(path, monitorId));
+        _ = UpdateAfterActionAsync(rotation.ApplyAsync(path, monitorId), showConfirmation: true);
     }
 
     public void ApplyFavorite()
@@ -155,7 +237,7 @@ internal sealed class WallpaperSession(Settings settings, IWallpaperService wall
 
     public Task TickAsync() => UpdateAfterActionAsync(rotation.TickAsync());
 
-    private async Task UpdateAfterActionAsync(Task<WallpaperActionResult> action)
+    private async Task UpdateAfterActionAsync(Task<WallpaperActionResult> action, bool showConfirmation = false)
     {
         var result = await action;
 
@@ -167,7 +249,12 @@ internal sealed class WallpaperSession(Settings settings, IWallpaperService wall
 
         if (result != WallpaperActionResult.Skipped)
         {
-            MessageKey = result == WallpaperActionResult.Failed ? "WallpaperError" : null;
+            MessageKey = result switch
+            {
+                WallpaperActionResult.AccessDenied => "WallpaperAccessDenied",
+                WallpaperActionResult.Failed => "WallpaperError",
+                _ => showConfirmation ? "WallpaperApplied" : null
+            };
         }
 
         NotifyState();
@@ -176,7 +263,8 @@ internal sealed class WallpaperSession(Settings settings, IWallpaperService wall
     private void RefreshSchedule()
     {
         rotation.Configure(Images, Settings.Selected, Settings.SelectedOnly,
-            Settings.RotationEnabled, Settings.IntervalMinutes, Settings.SeparateMonitors);
+            Settings.RotationEnabled, Settings.IntervalMinutes, Settings.SeparateMonitors,
+            Settings.MonitorPools.Select(pair => new MonitorWallpaperPool(pair.Key, pair.Value)));
         NotifyState();
     }
 

@@ -1,6 +1,6 @@
 namespace DesktopUtility.Core;
 
-public sealed record MonitorTarget(string? Id, string Name)
+public sealed record MonitorTarget(string? Id, string Name, int? Number = null)
 {
     public override string ToString() => Name;
 }
@@ -11,4 +11,4 @@ public interface IWallpaperService
     Task ApplyAsync(string filePath, string? monitorId);
 }
 
-public sealed class WallpaperOperationException(Exception cause) : Exception(cause.Message, cause);
+public class WallpaperOperationException(Exception cause) : Exception(cause.Message, cause);

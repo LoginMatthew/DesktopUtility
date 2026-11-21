@@ -10,16 +10,20 @@ internal sealed class MonitorAssignmentsView : Expander
     private readonly GalleryViewModel viewModel;
     private readonly Language words;
     private readonly Task<IReadOnlyList<MonitorTarget>> connectedMonitors;
+    private readonly Action<string> openPool;
     private readonly StackPanel rows = new();
     private readonly List<MonitorRow> monitorRows = [];
     private readonly Button apply;
     private string? selectedImage;
 
-    public MonitorAssignmentsView(GalleryViewModel viewModel, Language words, Task<IReadOnlyList<MonitorTarget>> connectedMonitors)
+    public event Action? SelectionsChanged;
+
+    public MonitorAssignmentsView(GalleryViewModel viewModel, Language words, Task<IReadOnlyList<MonitorTarget>> connectedMonitors, Action<string> openPool)
     {
         this.viewModel = viewModel;
         this.words = words;
         this.connectedMonitors = connectedMonitors;
+        this.openPool = openPool;
         Header = words["MonitorAssignments"];
         Margin = new Thickness(0, 4, 0, 5);
 
@@ -27,7 +31,7 @@ internal sealed class MonitorAssignmentsView : Expander
         var scroll = new ScrollViewer
         {
             Content = rows,
-            MaxHeight = 160,
+            MaxHeight = 210,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto
         };
 
@@ -49,6 +53,7 @@ internal sealed class MonitorAssignmentsView : Expander
         foreach (var row in monitorRows)
         {
             row.Assign.IsEnabled = path is not null;
+            row.SetFavorite.IsEnabled = path is not null;
         }
     }
 
@@ -57,6 +62,7 @@ internal sealed class MonitorAssignmentsView : Expander
         Loaded -= LoadMonitors;
         var monitors = await connectedMonitors;
         rows.Children.Clear();
+        Header = $"{words["MonitorAssignments"]} ({monitors.Count})";
 
         foreach (var monitor in monitors)
         {
@@ -72,52 +78,89 @@ internal sealed class MonitorAssignmentsView : Expander
             rows.Children.Add(Label(words["NoMonitors"]));
         }
 
-        UpdateApplyButton();
+        UpdateRows();
     }
 
     private void AddRow(string id, string name)
     {
-        var row = new WrapPanel();
-        row.Children.Add(Label(name));
+        var row = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var heading = Label(name);
+        heading.FontWeight = FontWeights.SemiBold;
+        row.Children.Add(heading);
+
+        var assign = Button(words["AssignSelectedImage"], () => ChangeSelectedImage(path => viewModel.AssignWallpaper(id, path)));
+        var clear = Button(words["ClearAssignment"], () => ChangeSelection(() => viewModel.ClearWallpaperAssignment(id)));
+        var setFavorite = Button(words["SetMonitorFavorite"], () => ChangeSelectedImage(path => viewModel.SetMonitorFavorite(id, path)));
+        var clearFavorite = Button(words["ClearMonitorFavorite"], () => ChangeSelection(() => viewModel.ClearMonitorFavorite(id)));
+
+        assign.IsEnabled = setFavorite.IsEnabled = selectedImage is not null;
+
         var image = Label("");
-        image.MaxWidth = 220;
-        row.Children.Add(image);
+        AddSelector(row, image, assign, clear);
+        var favorite = Label("");
+        favorite.SetResourceReference(TextBlock.ForegroundProperty, "Accent");
+        AddSelector(row, favorite, setFavorite, clearFavorite);
 
-        var clear = new Button { Content = words["ClearAssignment"] };
-        var assign = Button(words["AssignSelectedImage"], () =>
-        {
+        var poolControls = new WrapPanel();
+        var poolCount = Label("");
+        poolControls.Children.Add(poolCount);
+        poolControls.Children.Add(Button(words["OpenMonitorPool"], () => openPool(id)));
+        row.Children.Add(poolControls);
 
-            if (selectedImage is { } path)
-            {
-                viewModel.AssignWallpaper(id, path);
-                UpdateRow();
-            }
-        });
-
-        clear.Click += (_, _) =>
-        {
-            viewModel.ClearWallpaperAssignment(id);
-            UpdateRow();
-        };
-
-        assign.IsEnabled = selectedImage is not null;
-        row.Children.Add(assign);
-        row.Children.Add(clear);
-        monitorRows.Add(new MonitorRow(id, assign));
+        monitorRows.Add(new MonitorRow(id, assign, image, clear, setFavorite, favorite, clearFavorite, poolCount));
         rows.Children.Add(row);
-        UpdateRow();
+    }
 
-        void UpdateRow()
+    private static void AddSelector(StackPanel row, TextBlock description, Button set, Button clear)
+    {
+        var controls = new WrapPanel();
+        description.MaxWidth = 250;
+        controls.Children.Add(description);
+        controls.Children.Add(set);
+        controls.Children.Add(clear);
+        row.Children.Add(controls);
+    }
+
+    private void ChangeSelectedImage(Action<string> change)
+    {
+
+        if (selectedImage is { } path)
         {
-            string? path = viewModel.GetWallpaperAssignment(id);
-            image.Text = path is null ? words["NoAssignedImage"] : Path.GetFileName(path);
-            image.ToolTip = path;
-            clear.IsEnabled = path is not null;
-            UpdateApplyButton();
+            ChangeSelection(() => change(path));
         }
     }
 
-    private void UpdateApplyButton() => apply.IsEnabled = monitorRows.Any(row => viewModel.GetWallpaperAssignment(row.Id) is not null);
+    private void ChangeSelection(Action change)
+    {
+        change();
+        UpdateRows();
+        SelectionsChanged?.Invoke();
+    }
 
-    private sealed record MonitorRow(string Id, Button Assign);
+    public void UpdateRows()
+    {
+        bool hasAssignment = false;
+
+        foreach (var row in monitorRows)
+        {
+            string? path = viewModel.GetWallpaperAssignment(row.Id);
+            row.Image.Text = path is null ? words["NoAssignedImage"] : Path.GetFileName(path);
+            row.Image.ToolTip = path;
+            row.Clear.IsEnabled = path is not null;
+            hasAssignment |= path is not null;
+
+            string? favorite = viewModel.GetMonitorFavorite(row.Id);
+            row.Favorite.Text = favorite is null ? words["NoMonitorFavorite"]
+                : $"★ {words["FavoriteBadge"]} · {Path.GetFileName(favorite)}";
+            row.Favorite.ToolTip = favorite;
+            row.ClearFavorite.IsEnabled = favorite is not null;
+            row.PoolCount.Text = string.Format(System.Globalization.CultureInfo.GetCultureInfo(words.Code),
+                words["MonitorPoolCount"], viewModel.GetMonitorPoolCount(row.Id));
+        }
+
+        apply.IsEnabled = hasAssignment;
+    }
+
+    private sealed record MonitorRow(string Id, Button Assign, TextBlock Image, Button Clear,
+        Button SetFavorite, TextBlock Favorite, Button ClearFavorite, TextBlock PoolCount);
 }

@@ -6,6 +6,9 @@ internal sealed class Settings
     public string Folder { get; set; } = "";
     public string? Favorite { get; set; }
     public HashSet<string> Selected { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> MonitorAssignments { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> MonitorFavorites { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, HashSet<string>> MonitorPools { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public bool SelectedOnly { get; set; }
     public bool SeparateMonitors { get; set; }
     public bool RotationEnabled { get; set; }
@@ -16,4 +19,3 @@ internal sealed class Settings
     public double PanelOpacity { get; set; } = 0.92;
     public double Opacity { get; set; } = 1;
 }
-

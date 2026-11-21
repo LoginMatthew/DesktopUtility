@@ -24,10 +24,21 @@ public partial class MainWindow : Window
         this.settings = settings;
         this.galleryModel = galleryModel;
         InitializeComponent();
+        SourceInitialized += (_, _) =>
+        {
+            WindowMaximization.Attach(this);
+            Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+        };
+
         gallery = new GalleryView(this, galleryModel, words, Render);
         status = new RotationStatusViewModel(session, words);
         DataContext = status;
-        Closed += (_, _) => status.Dispose();
+        Closed += (_, _) =>
+        {
+            Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+            status.Dispose();
+        };
+
         IsVisibleChanged += (_, _) =>
         {
 
@@ -75,6 +86,12 @@ public partial class MainWindow : Window
             Navigation.Children.Add(button);
         }
 
+        if (activePage is "Gallery" or "Settings")
+        {
+            HelpTopic topic = activePage == "Gallery" ? HelpTopic.Gallery : HelpTopic.Settings;
+            Navigation.Children.Add(Button(words["PageHelp"], () => ShowPageHelp(topic)));
+        }
+
         ContentHost.Children.Clear();
         ContentHost.Children.Add(activePage switch
         {
@@ -83,6 +100,31 @@ public partial class MainWindow : Window
             _ => gallery.Build()
         });
         status.Refresh();
+    }
+
+    private void ShowPageHelp(HelpTopic topic)
+    {
+        var help = new PageHelpWindow(this, new PageHelpViewModel(words, topic));
+        help.ShowDialog();
+    }
+
+    private void OnDisplaySettingsChanged(object? sender, EventArgs args)
+    {
+
+        if (Dispatcher.HasShutdownStarted)
+        {
+
+            return;
+        }
+
+        _ = Dispatcher.InvokeAsync(() =>
+        {
+
+            if (IsVisible && activePage == "Gallery")
+            {
+                Render();
+            }
+        });
     }
 
     private void UpdateCaptionLabels()
